@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vehicle Parts Report Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    margin: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #333;
+  }
+  .filters {
+    background: #fff;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  label {
+    font-weight: bold;
+    margin-right: 10px;
+  }
+  select, input, button {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-right: 10px;
+  }
+  button {
+    cursor: pointer;
+    background: #007bff;
+    color: white;
+    border: none;
+    transition: 0.3s;
+  }
+  button:hover {
+    background: #0056b3;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background: #007bff;
+    color: white;
+  }
+  .delete-btn {
+    background: #dc3545;
+  }
+  .delete-btn:hover {
+    background: #b02a37;
+  }
+  .danger-btn {
+    background: #ff0000;
+    color: white;
+  }
+</style>
+</head>
+<body>
+
+<h1>📊 Vehicle Parts Report Viewer</h1>
+
+<div class="filters">
+  <label>Vehicle:</label>
+  <select id="vehicleFilter"></select>
+
+  <label>Date:</label>
+  <input type="date" id="dateFilter">
+
+  <button onclick="filterData()">🔍 Filter</button>
+  <button onclick="showAll()">📂 Show All</button>
+  <button onclick="downloadExcel()">📘 Excel</button>
+  <button onclick="downloadPDF()">📄 PDF</button>
+  <button class="danger-btn" onclick="deleteAll()">🗑 Delete All</button>
+</div>
+
+<table id="dataTable">
+  <thead>
+    <tr>
+      <th>Vehicle</th>
+      <th>Date</th>
+      <th>Part</th>
+      <th>Status</th>
+      <th>Remarks</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const vehicleSelect = document.getElementById("vehicleFilter");
+
+// Populate vehicle dropdown
+function populateVehicleList() {
+  const data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  const vehicles = [...new Set(data.map(d => d.vehicle))];
+  vehicleSelect.innerHTML = "<option value=''>-- All Vehicles --</option>";
+  vehicles.forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    vehicleSelect.appendChild(opt);
+  });
+}
+
+// Render table
+function renderTable(data) {
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  data.forEach((d, index) => {
+    const row = `<tr>
+      <td>${d.vehicle}</td>
+      <td>${d.date}</td>
+      <td>${d.part}</td>
+      <td>${d.status || '-'}</td>
+      <td>${d.remarks || '-'}</td>
+      <td><button class="delete-btn" onclick="deleteRecord(${index})">Delete</button></td>
+    </tr>`;
+    tbody.innerHTML += row;
+  });
+}
+
+// Load data
+function loadAllData() {
+  const data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  renderTable(data);
+  populateVehicleList();
+}
+
+// Filter
+function filterData() {
+  const vehicle = vehicleSelect.value;
+  const date = document.getElementById("dateFilter").value;
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  if (vehicle) data = data.filter(d => d.vehicle === vehicle);
+  if (date) data = data.filter(d => d.date === date);
+  renderTable(data);
+}
+
+// Show all
+function showAll() {
+  loadAllData();
+}
+
+// Delete specific record
+function deleteRecord(index) {
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  if (confirm("Are you sure you want to delete this record?")) {
+    data.splice(index, 1);
+    localStorage.setItem("vehicleData", JSON.stringify(data));
+    loadAllData();
+  }
+}
+
+// Delete all records
+function deleteAll() {
+  if (confirm("⚠️ Are you sure you want to delete all records?")) {
+    localStorage.removeItem("vehicleData");
+    loadAllData();
+  }
+}
+
+// Download Excel
+function downloadExcel() {
+  const table = document.getElementById("dataTable");
+  const wb = XLSX.utils.table_to_book(table, {sheet:"Vehicle Parts Report"});
+  XLSX.writeFile(wb, "Vehicle_Parts_Report.xlsx");
+}
+
+// Download PDF
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.text("Vehicle Parts Report", 14, 15);
+  
+  const table = document.getElementById("dataTable");
+  const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.innerText).slice(0, -1);
+  const rows = [];
+  table.querySelectorAll("tbody tr").forEach(tr => {
+    const row = Array.from(tr.querySelectorAll("td")).slice(0, -1).map(td => td.innerText);
+    rows.push(row);
+  });
+
+  doc.autoTable({
+    head: [headers],
+    body: rows,
+    startY: 25,
+    styles: { fontSize: 10, cellPadding: 3 },
+    headStyles: { fillColor: [0, 123, 255] },
+  });
+
+  doc.save("Vehicle_Parts_Report.pdf");
+}
+
+window.onload = loadAllData;
+</script>
+
+</body>
+</html>

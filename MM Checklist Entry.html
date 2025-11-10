@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vehicle Parts Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 30px; background: #f7f7f7; }
+  h1 { color: #333; }
+  select, button, input { margin: 5px; padding: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+  .part-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .part-list label { width: 200px; }
+  .controls { margin-top: 15px; }
+</style>
+</head>
+<body>
+
+<h1>🚛 Vehicle Parts Entry & Report System</h1>
+
+<label for="vehicleSearch">Search Vehicle:</label>
+<input type="text" id="vehicleSearch" placeholder="Search vehicle...">
+<select id="vehicle"></select>
+
+<h3>📅 Date:</h3>
+<input type="date" id="entryDate">
+
+<h3>🧰 Select Parts:</h3>
+<div id="partsContainer" class="part-list"></div>
+
+<div class="controls">
+  <button onclick="saveParts()">💾 Save Parts</button>
+  <button onclick="viewParts()">👁️ View Saved Data</button>
+  <button onclick="downloadExcel()">⬇️ Download Excel</button>
+  <button onclick="downloadPDF()">⬇️ Download PDF</button>
+  <button onclick="clearVehicleData()">🗑️ Clear Selected Vehicle Data</button>
+</div>
+
+<h3>📋 Saved Data:</h3>
+<table id="dataTable">
+  <thead>
+    <tr>
+      <th>Vehicle</th>
+      <th>Date</th>
+      <th>Part</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const vehicles = [
+"C7553","C7576","KA 01 AK 2266","KA 01 AK 2288","KA 01 AL 1266","KA 01 AL 1288",
+"KA 51 B 8499","KA 51 B 8677","KA 51 B 8688","TN 52 AA 0033","TN 52 AA 0077","TN 52 AA 0099",
+"TN 52 AA 0333","TN 52 AA 0666","TN 52 AA 2355","TN 52 AA 2799","TN 52 AA 3155","TN 52 AA 3177",
+"TN 52 AA 3299","TN 52 AA 3488","TN 52 AA 4866","TN 52 AA 5144","TN 52 AA 6233","TN 52 AA 6255",
+"TN 52 AA 6566","TN 52 AA 6755","TN 52 AA 7988","TN 52 AA 8177","TN 52 AA 8199","TN 52 AA 8388",
+"TN 52 AA 9822","TN 52 AB 0011","TN 52 AB 0044","TN 52 AB 3344","TN 52 AB 3455","TN 52 AB 3566",
+"TN 52 AB 3577","TN 52 AB 3599","TN 52 AB 3933","TN 52 AB 4004","TN 52 AB 5000","TN 52 AB 6166",
+"TN 52 AB 6299","TN 52 AB 6611","TN 52 AB 7007","TN 52 AB 7133","TN 52 AB 7199","TN 52 AB 7244",
+"TN 52 AB 8000","TN 52 AC 4233","TN 52 AC 4255","TN 52 AC 4288","TN 52 AC 4611","TN 52 AC 4633",
+"TN 52 AC 7333","TN 52 AC 7366","TN 52 AC 7455","TN 52 AC 7555","TN 52 AC 7855","TN 52 AC 8166",
+"TN 52 AD 3944","TN 52 AD 4088","TN 52 AD 4133","TN 52 AD 4355","TN 52 AD 4755","TN 52 AD 4988",
+"TN 52 AD 9488","TN 52 AD 9866","TN 52 AE 1244","TN 52 AE 1388","TN 52 AE 1544","TN 52 AE 3533",
+"TN 52 AE 3866","TN 52 AE 4244","TN 52 AE 8155","TN 52 AE 8399","TN 52 AE 8555","TN 52 AE 8699",
+"TN 52 AE 8744","TN 52 F 8781","TN 52 F 8942","TN 52 F 9127","TN 52 H 7166","TN 52 H 7355",
+"TN 52 J 1633","TN 52 J 1848","TN 52 J 2767","TN 52 J 3210","TN 52 J 3364","TN 52 J 6890",
+"TN 52 J 7270","TN 52 J 7870","TN 52 J 7909","TN 52 J 7911","TN 52 J 9280","TN 52 J 9281",
+"TN 52 J 9283","TN 52 J 9788","TN 52 J 9805","TN 52 J 9844","TN 52 L 5866","TN 52 L 5941",
+"TN 52 L 6124","TN 52 L 6140","TN 52 L 6349","TN 52 L 6925","TN 52 L 6964","TN 52 L 7004",
+"TN 52 L 7024","TN 52 P 4630","TN 52 P 4654","TN 52 R 3255","TN 52 R 5688","TN 52 R 6288",
+"TN 52 R 6355","TN 52 R 6377","TN 52 R 6588","TN 52 R 9266","TN 52 R 9366","TN 52 R 9766",
+"TN 52 R 9855","TN 52 R 9959","TN 91 Y 6345","TN52AE4699","TN52AE4955"
+];
+
+const parts = [
+"JACKEY","BIG LEVER","SMALL LEVER","WATER CAN","TRUCK KEY","ADBLUE KEY","DIESEL KEY","CONTAINER KEY",
+"BATTERY BOX","BATTERY","UPS","AUDIO SET SPEAKER","FAN","BED BIG","PILLOW","STOVE","COOKING ITEM COOKER",
+"NAME BOARD","REFLECTER STONE","HEAD LIGHT LIGHT COVER R","HEAD LIGHT LIGHT COVER L","DRIVER WOODEN SHEET",
+"BONNET WOODEN SHEET","CLEANER WOODEN SHEET","STEPNEY","LADDER","BUCKET","ATM CARD","RC FILE","BEDSHEETS"
+];
+
+// Populate vehicle dropdown
+const vehicleSelect = document.getElementById("vehicle");
+vehicles.forEach(v => {
+  const opt = document.createElement("option");
+  opt.value = v;
+  opt.textContent = v;
+  vehicleSelect.appendChild(opt);
+});
+
+// Search box filter
+document.getElementById("vehicleSearch").addEventListener("input", function() {
+  const search = this.value.toLowerCase();
+  vehicleSelect.innerHTML = "";
+  vehicles.filter(v => v.toLowerCase().includes(search)).forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    vehicleSelect.appendChild(opt);
+  });
+});
+
+// Populate parts checkboxes
+const partsContainer = document.getElementById("partsContainer");
+parts.forEach(p => {
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.value = p;
+  label.appendChild(checkbox);
+  label.appendChild(document.createTextNode(" " + p));
+  partsContainer.appendChild(label);
+});
+
+function saveParts() {
+  const vehicle = vehicleSelect.value;
+  const date = document.getElementById("entryDate").value;
+  const selectedParts = Array.from(document.querySelectorAll("#partsContainer input:checked")).map(x => x.value);
+  if (!vehicle || !date || selectedParts.length === 0) return alert("Please select vehicle, date, and parts.");
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  selectedParts.forEach(part => {
+    data.push({ vehicle, date, part });
+  });
+  localStorage.setItem("vehicleData", JSON.stringify(data));
+  alert("✅ Parts saved for " + vehicle);
+}
+
+function viewParts() {
+  const data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  data.forEach(d => {
+    const row = `<tr><td>${d.vehicle}</td><td>${d.date}</td><td>${d.part}</td></tr>`;
+    tbody.innerHTML += row;
+  });
+}
+
+function downloadExcel() {
+  const selectedVehicle = vehicleSelect.value;
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]").filter(d => d.vehicle === selectedVehicle);
+  if (data.length === 0) return alert("No data found for selected vehicle!");
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, selectedVehicle);
+  XLSX.writeFile(wb, `${selectedVehicle}_Parts_List.xlsx`);
+}
+
+function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+  const selectedVehicle = vehicleSelect.value;
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]").filter(d => d.vehicle === selectedVehicle);
+  if (data.length === 0) return alert("No data found for selected vehicle!");
+  const doc = new jsPDF();
+  doc.text(`Vehicle Parts Report - ${selectedVehicle}`, 14, 15);
+  const tableData = data.map(d => [d.vehicle, d.date, d.part]);
+  doc.autoTable({
+    head: [["Vehicle", "Date", "Part"]],
+    body: tableData,
+    startY: 25
+  });
+  doc.save(`${selectedVehicle}_Parts_List.pdf`);
+}
+
+function clearVehicleData() {
+  const selectedVehicle = vehicleSelect.value;
+  if (!selectedVehicle) return alert("Select a vehicle to clear data!");
+  let data = JSON.parse(localStorage.getItem("vehicleData") || "[]");
+  data = data.filter(d => d.vehicle !== selectedVehicle);
+  localStorage.setItem("vehicleData", JSON.stringify(data));
+  alert("🗑️ Data cleared for " + selectedVehicle);
+  viewParts();
+}
+</script>
+</body>
+</html>

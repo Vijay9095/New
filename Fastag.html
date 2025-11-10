@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fastag Amount Dashboard</title>
+
+  <!-- Libraries -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/multiple-select@1.7.0/dist/multiple-select.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/multiple-select@1.7.0/dist/multiple-select.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #f1f8e9, #e8f5e9);
+      color: #1b5e20;
+      text-align: center;
+      padding: 30px;
+    }
+    h1 {
+      font-size: 2.4em;
+      color: #2e7d32;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+    }
+    .card {
+      width: 95%;
+      max-width: 950px;
+      margin: 20px auto;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 25px;
+    }
+    input[type="file"], input[type="text"], select {
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 2px solid #a5d6a7;
+      font-size: 16px;
+      margin: 8px;
+      width: 250px;
+      outline: none;
+      transition: 0.3s;
+    }
+    input:focus {
+      border-color: #43a047;
+      box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+    }
+    #vehicleSelect {
+      width: 300px;
+    }
+    button {
+      background: linear-gradient(45deg, #4caf50, #81c784);
+      border: none;
+      color: white;
+      font-weight: bold;
+      padding: 12px 25px;
+      border-radius: 25px;
+      margin: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
+    }
+    button:hover {
+      background: linear-gradient(45deg, #2e7d32, #43a047);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(76, 175, 80, 0.5);
+    }
+    #totalAmount {
+      font-weight: bold;
+      color: #2e7d32;
+      font-size: 1.6em;
+    }
+    #chartContainer {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    #chartTotal {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: bold;
+      color: #2e7d32;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    canvas {
+      width: 100% !important;
+      height: 500px !important;
+      background: linear-gradient(135deg, #2e7d32, #1b5e20);
+      border-radius: 20px;
+      padding: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📊 Fastag Amount Dashboard</h1>
+
+  <div class="card">
+    <input type="file" id="excelFile" accept=".xlsx, .xls" />
+    <input type="text" id="chartTitleInput" placeholder="Enter Chart Title (e.g. October 2025 Fastag Report)" />
+    <button id="updateTitleBtn">✅ Update Title</button>
+  </div>
+
+  <div class="card">
+    <select id="vehicleSelect" multiple></select>
+    <h3>💰 Total Amount: ₹<span id="totalAmount">0.00</span></h3>
+  </div>
+
+  <div class="card">
+    <h2 id="chartTitleDisplay">Fastag Report</h2>
+    <div id="chartContainer">
+      <div id="chartTotal">₹0.00</div>
+      <canvas id="barChart"></canvas>
+    </div>
+    <button id="downloadChartBtn">⬇️ Download Chart</button>
+  </div>
+
+  <script>
+    let allData = [];
+    let chart = null;
+    let currentTotal = 0;
+
+    // Read Excel
+    document.getElementById("excelFile").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        allData = XLSX.utils.sheet_to_json(sheet);
+        populateVehicles();
+        alert("✅ Excel file uploaded successfully!");
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Populate dropdown
+    function populateVehicles() {
+      const vehicleSelect = document.getElementById("vehicleSelect");
+      vehicleSelect.innerHTML = "";
+      const vehicles = [...new Set(allData.map(r => r.VehicleNo || r["Vehicle No"]))];
+      vehicles.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v;
+        vehicleSelect.appendChild(opt);
+      });
+      $('#vehicleSelect').multipleSelect({
+        filter: true,
+        selectAll: true,
+        placeholder: "Select Vehicles",
+        onClick: updateChart,
+        onCheckAll: updateChart,
+        onUncheckAll: updateChart
+      });
+    }
+
+    // Manual title
+    document.getElementById("updateTitleBtn").addEventListener("click", () => {
+      const title = document.getElementById("chartTitleInput").value.trim();
+      if (title) document.getElementById("chartTitleDisplay").textContent = title;
+      if (chart) chart.options.plugins.title.text = title;
+      if (chart) chart.update();
+    });
+
+    // Chart update
+    function updateChart() {
+      const selected = $('#vehicleSelect').multipleSelect('getSelects');
+      if (selected.length === 0) {
+        if (chart) chart.destroy();
+        document.getElementById("totalAmount").textContent = "0.00";
+        document.getElementById("chartTotal").textContent = "₹0.00";
+        return;
+      }
+
+      const totals = {};
+      let overall = 0;
+      allData.forEach(r => {
+        const v = r.VehicleNo || r["Vehicle No"];
+        const amt = parseFloat(r["Debit Amount"] || r.Amount || 0) || 0;
+        if (selected.includes(v)) {
+          totals[v] = (totals[v] || 0) + amt;
+          overall += amt;
+        }
+      });
+      currentTotal = overall;
+      document.getElementById("totalAmount").textContent = overall.toFixed(2);
+      document.getElementById("chartTotal").textContent = "₹" + overall.toLocaleString();
+      drawChart(totals);
+    }
+
+    // Draw colorful chart
+    function drawChart(totals) {
+      const ctx = document.getElementById("barChart").getContext("2d");
+      const labels = Object.keys(totals);
+      const values = Object.values(totals);
+      const colors = labels.map((_, i) => `hsl(${i * 45}, 80%, 50%)`);
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Total Amount (₹)',
+            data: values,
+            backgroundColor: colors,
+            borderColor: '#ffffff',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: document.getElementById("chartTitleDisplay").textContent,
+              color: '#ffffff',
+              font: { size: 20, weight: 'bold' }
+            },
+            datalabels: {
+              color: 'white',
+              anchor: 'center',
+              align: 'center',
+              font: { size: 14, weight: 'bold' },
+              formatter: (v) => v.toLocaleString()
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#ffffff', maxRotation: 45, minRotation: 45 },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#ffffff' },
+              grid: { color: 'rgba(255,255,255,0.2)' }
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
+
+    // Download chart with total amount
+    document.getElementById("downloadChartBtn").addEventListener("click", () => {
+      if (!chart) return alert("⚠️ Please upload and generate a chart first!");
+
+      const canvas = document.getElementById("barChart");
+      const ctx = canvas.getContext("2d");
+
+      // Add total text to the canvas image (top-right)
+      ctx.save();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 20px Poppins";
+      ctx.textAlign = "right";
+      ctx.fillText(`💰 Total: ₹${currentTotal.toFixed(2)}`, canvas.width - 30, 40);
+      ctx.restore();
+
+      const link = document.createElement("a");
+      link.download = "Fastag_Chart.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+
+      chart.update(); // restore
+    });
+  </script>
+</body>
+</html>

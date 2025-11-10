@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin — MM Roadways</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;margin:0;padding:24px}
+    .wrap{max-width:900px;margin:20px auto;background:#fff;padding:22px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
+    h1{margin:0 0 14px;color:#1a237e}
+    label{display:block;margin-top:12px;font-weight:600}
+    input{padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:6px}
+    button{margin-top:12px;padding:10px 14px;border-radius:8px;border:none;background:#1a237e;color:#fff;cursor:pointer}
+    .danger{background:#d32f2f}
+    table{width:100%;border-collapse:collapse;margin-top:16px}
+    th,td{padding:10px;border-bottom:1px solid #eee;text-align:left}
+    .small{font-size:13px;color:#666;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin Panel — Manage Customer Accounts</h1>
+
+    <div id="setupBlock">
+      <p class="small">If this is the first run, set a secure admin password below. This password is stored locally (demo only).</p>
+      <label>Set Admin Username</label>
+      <input id="adminUser" placeholder="admin (recommended)"/>
+      <label>Set Admin Password</label>
+      <input id="adminPass" type="password" placeholder="choose admin password (min 6)"/>
+      <button id="setupBtn">Set Admin Account</button>
+    </div>
+
+    <div id="loginBlock" style="display:none">
+      <label>Admin Username</label>
+      <input id="loginUser"/>
+      <label>Admin Password</label>
+      <input id="loginPass" type="password"/>
+      <button id="loginBtn">Admin Login</button>
+    </div>
+
+    <div id="panel" style="display:none">
+      <h2>Create Customer Account</h2>
+      <label>Customer Name</label>
+      <input id="custName"/>
+      <label>Customer Email (username)</label>
+      <input id="custEmail"/>
+      <label>Customer Password</label>
+      <input id="custPass" type="password"/>
+      <button id="createCustBtn">Create Customer</button>
+
+      <h2 style="margin-top:20px">Existing Customers</h2>
+      <table id="usersTable">
+        <thead><tr><th>Name</th><th>Email</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <button id="logoutBtn" style="margin-top:14px;background:#777">Logout</button>
+      <button id="wipeBtn" class="danger" style="float:right">Wipe All Customers</button>
+    </div>
+
+    <div id="msg" class="small"></div>
+  </div>
+
+  <script>
+    // Helpers
+    const getAdmin = () => JSON.parse(localStorage.getItem('MM_admin')||'null');
+    const setAdmin = (a) => localStorage.setItem('MM_admin', JSON.stringify(a));
+    const getUsers = () => JSON.parse(localStorage.getItem('MM_users')||'[]');
+    const setUsers = (u) => localStorage.setItem('MM_users', JSON.stringify(u));
+
+    // Init: if admin exists show login, else show setup
+    document.addEventListener('DOMContentLoaded', () => {
+      const admin = getAdmin();
+      if (admin) {
+        document.getElementById('setupBlock').style.display = 'none';
+        document.getElementById('loginBlock').style.display = 'block';
+      } else {
+        document.getElementById('setupBlock').style.display = 'block';
+        document.getElementById('loginBlock').style.display = 'none';
+      }
+    });
+
+    // Setup admin
+    document.getElementById('setupBtn').addEventListener('click', () => {
+      const user = document.getElementById('adminUser').value.trim() || 'admin';
+      const pass = document.getElementById('adminPass').value;
+      const msg = document.getElementById('msg'); msg.textContent='';
+
+      if (!pass || pass.length < 6) { msg.textContent='Password must be at least 6 chars'; return; }
+      setAdmin({ user, pass });
+      msg.textContent = 'Admin created. Please log in below.';
+      document.getElementById('setupBlock').style.display='none';
+      document.getElementById('loginBlock').style.display='block';
+    });
+
+    // Admin login
+    document.getElementById('loginBtn').addEventListener('click', () => {
+      const user = document.getElementById('loginUser').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      const admin = getAdmin();
+      const msg = document.getElementById('msg'); msg.textContent='';
+
+      if (!admin) { msg.textContent='No admin set.'; return; }
+      if (user !== admin.user || pass !== admin.pass) { msg.textContent='Invalid admin credentials'; return; }
+
+      // show panel
+      document.getElementById('loginBlock').style.display='none';
+      document.getElementById('panel').style.display='block';
+      loadUsersTable();
+    });
+
+    // Create customer
+    document.getElementById('createCustBtn').addEventListener('click', () => {
+      const name = document.getElementById('custName').value.trim();
+      const email = (document.getElementById('custEmail').value||'').trim().toLowerCase();
+      const pass = document.getElementById('custPass').value;
+      const msg = document.getElementById('msg'); msg.textContent='';
+
+      if (!name || !email || !pass) { msg.textContent='Fill name, email and password'; return; }
+      if (pass.length < 4) { msg.textContent='Password min 4 chars (demo)'; return; }
+
+      const users = getUsers();
+      if (users.find(u=>u.email===email)) { msg.textContent='Customer with this email already exists'; return; }
+
+      users.push({ name, email, pass, role: 'customer' });
+      setUsers(users);
+      document.getElementById('custName').value=''; document.getElementById('custEmail').value=''; document.getElementById('custPass').value='';
+      msg.textContent = 'Customer created successfully';
+      loadUsersTable();
+    });
+
+    // Load table
+    function loadUsersTable(){
+      const tbody = document.querySelector('#usersTable tbody');
+      tbody.innerHTML = '';
+      const users = getUsers();
+      users.forEach((u,i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(u.name)}</td><td>${escapeHtml(u.email)}</td>
+          <td>
+            <button data-i="${i}" class="delBtn" style="background:#d32f2f;color:#fff;border:none;padding:6px 8px;border-radius:6px;cursor:pointer">Delete</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      // attach delete handlers
+      document.querySelectorAll('.delBtn').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+          const i = parseInt(ev.target.dataset.i);
+          if (!confirm('Delete this customer?')) return;
+          const users = getUsers();
+          users.splice(i,1);
+          setUsers(users);
+          loadUsersTable();
+        });
+      });
+    }
+
+    // Logout admin
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      document.getElementById('panel').style.display='none';
+      document.getElementById('loginBlock').style.display='block';
+      document.getElementById('msg').textContent = 'Logged out';
+    });
+
+    // Wipe users
+    document.getElementById('wipeBtn').addEventListener('click', () => {
+      if (!confirm('Wipe ALL customer accounts? This cannot be undone.')) return;
+      setUsers([]);
+      loadUsersTable();
+    });
+
+    // small helper to avoid XSS in table
+    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  </script>
+</body>
+</html>
